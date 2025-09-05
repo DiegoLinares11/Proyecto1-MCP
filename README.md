@@ -124,31 +124,31 @@ Funcionalidades soportadas
 
 1. sql.load(schema_path)
 
-  Carga un esquema SQL en SQLite.
+    Carga un esquema SQL en SQLite.
 
-  Persiste en un archivo .db.
+    Persiste en un archivo .db.
 
 2. sql.explain(query)
 
-  Devuelve el plan de ejecución estimado (EXPLAIN QUERY PLAN).
+    Devuelve el plan de ejecución estimado (EXPLAIN QUERY PLAN).
 
 3. sql.diagnose(query)
 
-  Aplica reglas estáticas:
+   Aplica reglas estáticas:
 
-  SELECT *
+    SELECT *
 
-  LIKE '%texto'
+    LIKE '%texto'
 
-  Función en WHERE (ej. LOWER(col))
+    Función en WHERE (ej. LOWER(col))
 
-  ORDER BY sin índice
+    ORDER BY sin índice
 
-  JOIN sin condición
+    JOIN sin condición
 
 4. sql.optimize(query, create_index)
 
-  Combina diagnóstico + sugerencias.
+    Combina diagnóstico + sugerencias.
 
-  Permite aplicar un índice (--create-index) y compara plan antes vs después.
+    Permite aplicar un índice (--create-index) y compara plan antes vs después.
 
