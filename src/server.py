@@ -1,4 +1,5 @@
 import os
+import json
 import typer
 from typing import Optional
 from .adapters.sqlite_adapter import SQLiteAdapter
@@ -9,23 +10,33 @@ from .utils.formatting import table
 
 app = typer.Typer(help="SQLScout Server — CLI demo y stub MCP")
 
+DB_PATH: Optional[str] = None
 
-# Sesión única en memoria (MVP)
-adapter = SQLiteAdapter("sqlscout.db")
+@app.callback()
+def main(db: Optional[str] = typer.Option(None, help="Ruta al archivo SQLite (default: sqlscout.db)")):
+    """
+    Permite elegir la BD por línea de comandos con --db.
+    """
+    global DB_PATH
+    DB_PATH = db or "sqlscout.db"
 
+def get_adapter() -> SQLiteAdapter:
+    return SQLiteAdapter(DB_PATH or "sqlscout.db")
 
 @app.command()
 def load(schema_path: str):
-    """Carga un esquema SQL en SQLite embebido."""
+    """Carga un esquema SQL en SQLite persistente."""
+    adapter = get_adapter()
     with open(schema_path, "r", encoding="utf-8") as f:
         schema = f.read()
     adapter.load_schema(schema)
-    typer.echo("Esquema cargado en SQLite (memoria).")
+    typer.echo(f"Esquema cargado en SQLite → {DB_PATH}")
 
 
 @app.command()
 def explain(query: str):
     """Muestra EXPLAIN QUERY PLAN (SQLite)."""
+    adapter = get_adapter()
     plan = adapter.explain(query)
     typer.echo(table(plan))
 
@@ -38,25 +49,53 @@ def diagnose_cmd(query: str):
 
 
 @app.command()
-def optimize(query: str, create_index: Optional[str] = typer.Option(None, help="DDL opcional para crear índice y comparar")):
-    """Diagnóstico + (opcional) índice sugerido y comparación básica."""
+def optimize(
+    query: str,
+    create_index: Optional[str] = typer.Option(None, help="DDL para crear índice y comparar plan antes/después"),
+):
+    """
+    Diagnóstico estático + (opcional) crear índice y comparar plan antes/después.
+    """
+    adapter = get_adapter()
+
+    # Diagnóstico estático
     findings = diagnose(query)
     sugg = suggest_from_findings(findings)
-
 
     typer.echo("# Diagnóstico")
     typer.echo(table([f.__dict__ for f in findings], headers=["rule","severity","message","detail"]))
 
-
     typer.echo("\n# Sugerencias")
     typer.echo(table(sugg, headers=["type","message","ddl"]))
 
+    if not create_index:
+        return
 
-    if create_index:
-        adapter.create_index(create_index)
-        typer.echo("\n# Índice aplicado. Nuevo plan:")
-        plan = adapter.explain(query)
-        typer.echo(table(plan))
+    # Comparación de plan
+    typer.echo("\n# Comparación de plan (antes → después)")
+    plan_before = adapter.explain(query)
+
+    # Aplicar índice
+    adapter.create_index(create_index)
+
+    plan_after = adapter.explain(query)
+
+    # Mostrar comparación
+    def simplify(plan_rows):
+        # SQLite devuelve columnas: id, parent, notused, detail
+        return [row["detail"] for row in plan_rows]
+
+    rows = []
+    before = simplify(plan_before)
+    after = simplify(plan_after)
+    maxlen = max(len(before), len(after))
+    for i in range(maxlen):
+        rows.append({
+            "before": before[i] if i < len(before) else "",
+            "after":  after[i]  if i < len(after)  else "",
+        })
+    typer.echo(table(rows, headers=["before", "after"]))
+
 
 
 # === Stub MCP (JSON-RPC por stdin/stdout) ===
